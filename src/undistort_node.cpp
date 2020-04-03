@@ -34,7 +34,9 @@ void imageCallback(
         const cv::Mat& mapx,
         const cv::Mat& mapy,
         const cv::Rect& roi,
-        const image_transport::Publisher& publisher)
+        const ocam_model& model,
+        const image_transport::Publisher& publisher,
+        const ros::Publisher& publisher_info)
 {
     auto inImage = cv_bridge::toCvShare(msg);
     cv::Mat undistorted(inImage->image.size(), inImage->image.type());
@@ -57,8 +59,35 @@ void imageCallback(
     outImage.image = out;
     outImage.header = inImage->header;
     outImage.encoding = inImage->encoding;
+    outImage.header.frame_id="ueye_link";
+    
+    sensor_msgs::ImagePtr outImagePtr= outImage.toImageMsg();
+    sensor_msgs::CameraInfoPtr img_info(new sensor_msgs::CameraInfo());
+    img_info->height=model.height;
+    img_info->width=model.width;
+    img_info->K[0]=img_info->width/2.75;
+    img_info->K[4]=img_info->width/2.75;
+    img_info->K[2]=model.xc; 
+    img_info->K[5]=model.yc;
+    img_info->K[8]=1;
+    img_info->D.resize(8, 0);
+    for(int i; i<8; i++)
+    {
+      img_info->D[i] = 0;
+    }
+    img_info->R[0]=1; img_info->R[4]=1; img_info->R[8]=1;
+    img_info->P[0]=img_info->K[0];
+    img_info->P[5]=img_info->K[4];
+    img_info->P[2]=img_info->K[2];
+    img_info->P[6]=img_info->K[5];
+    img_info->P[10]=1;
+    img_info->header = inImage->header;
+    img_info->header.stamp = outImagePtr->header.stamp;
+    img_info->distortion_model= "plumb_bob";
+    img_info->header.frame_id="ueye_link";
 
-    publisher.publish(outImage.toImageMsg());
+    publisher.publish(outImagePtr);
+    publisher_info.publish(img_info);
 }
 
 void printOcamModel(const struct ocam_model& model)
@@ -124,6 +153,7 @@ int main(int argc, char **argv)
     cv::Mat mapy_persp = cv::cvarrToMat(cmapy_persp);
 
     image_transport::ImageTransport img_transport(nodeHandle);
+    
 
     cv::Rect roi(params.leftBound,
                  params.topBound,
@@ -131,10 +161,12 @@ int main(int argc, char **argv)
                  params.bottomBound-params.topBound);
 
     auto publisher = img_transport.advertise(params.outTopic, 1);
+    auto publisher_info =  nodeHandle.advertise<sensor_msgs::CameraInfo>("camera_info",10);
+     
     auto subscriber = img_transport.subscribe(params.inTopic, 1,
                             [&](const sensor_msgs::ImageConstPtr& msg)
                             {
-                                imageCallback(msg, mapx_persp, mapy_persp, roi, publisher);
+                                imageCallback(msg, mapx_persp, mapy_persp, roi, model, publisher, publisher_info);
                             },
                             ros::VoidPtr(),
                             image_transport::TransportHints(params.transportHint));

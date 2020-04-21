@@ -67,8 +67,8 @@ void imageCallback(
     img_info->width=model.width;
     img_info->K[0]=img_info->width/2.75;
     img_info->K[4]=img_info->width/2.75;
-    img_info->K[2]=model.xc; 
-    img_info->K[5]=model.yc;
+    img_info->K[2]=model.yc; 
+    img_info->K[5]=model.xc;
     img_info->K[8]=1;
     img_info->D.resize(8, 0);
     for(int i; i<8; i++)
